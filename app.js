@@ -103,18 +103,23 @@ async function generateDockerfileWithGPT(projectInfo, useMultiStage, customTempl
 Based on the following project information, generate a Dockerfile suitable for a production environment. ${useMultiStage ? 'Use multi-stage builds to optimize image size.' : 'Use a single-stage build to keep the Dockerfile simple.'} Please consider the following points:
 1. Choose an appropriate base image, preferring official lightweight images
 2. Correctly set the working directory, copy necessary files, and install dependencies
-3. Run the application as a non-root user
+3. Run the application as a non-root user when possible
 4. Set necessary environment variables
-5. Expose required ports
+5. Only expose ports if the project actually requires them (e.g., for web services or APIs)
 6. Use ENTRYPOINT and/or CMD to properly start the application
-7. Consider adding a health check
+7. Consider adding a health check if appropriate for the application type
+
+Analyze the project information carefully to determine:
+- If the project is a web service or requires network communication
+- The type of application (e.g., CLI tool, web server, background worker)
+- Specific runtime requirements
 
 Project information:
 ${JSON.stringify(projectInfo, null, 2)}
 
 ${customTemplate ? `Please generate the Dockerfile based on the following template, making appropriate modifications as needed:\n${customTemplate}` : ''}
 
-Please output only the content of the Dockerfile, without any explanations, quotation marks, or Markdown formatting.
+Please output only the content of the Dockerfile, without any explanations, quotation marks, or Markdown formatting. Ensure that the Dockerfile is tailored to the specific needs of this project, only including necessary steps and configurations.
 `;
 
     const response = await callGPTAPIWithRetry(prompt);
