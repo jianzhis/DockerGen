@@ -50,12 +50,13 @@ async function generateDockerfileForRepo(repoUrl, options = {}) {
 async function analyzeProjectWithGPT(repoPath) {
     const directoryStructure = generateDirectoryStructure(repoPath);
     const readmeContent = extractReadme(repoPath);
+    const dockerRelatedFiles = extractDockerRelatedFiles(repoPath);
     const keyFiles = await identifyKeyFilesWithGPT(directoryStructure);
     const keyFilesContent = extractKeyFilesContent(repoPath, keyFiles);
 
     const analysisPrompt = `
 Analyze the following project information and output the result in JSON format:
-1. Programming language used
+1. Programming language(s) used
 2. Main dependency management files (e.g., requirements.txt, package.json, composer.json, etc.)
 3. Possible entry point file
 4. Build commands
@@ -63,12 +64,18 @@ Analyze the following project information and output the result in JSON format:
 6. Ports that need to be exposed (if any)
 7. Environment variables (if any)
 8. Potential volume mounts needed (if any)
+9. Any existing Docker-related configurations
+10. Project type (e.g., Web application, API service, Batch job, etc.)
+11. Any specific framework or major libraries used
 
 Directory structure:
 ${directoryStructure}
 
 README content:
 ${readmeContent}
+
+Docker-related files:
+${dockerRelatedFiles}
 
 Key files content:
 ${keyFilesContent}
@@ -78,6 +85,20 @@ Please ensure the output is valid JSON format without any additional formatting 
 
     const projectInfoResponse = await callGPTAPIWithRetry(analysisPrompt);
     return JSON.parse(cleanJSONResponse(projectInfoResponse));
+}
+
+function extractDockerRelatedFiles(repoPath) {
+    const dockerFiles = ['.dockerignore', 'docker-compose.yml', 'Dockerfile'];
+    let content = '';
+    for (const file of dockerFiles) {
+        const filePath = path.join(repoPath, file);
+        if (fs.existsSync(filePath)) {
+            content += `--- ${file} ---\n`;
+            content += fs.readFileSync(filePath, 'utf-8').slice(0, 1000); // 限制每个文件的内容
+            content += '\n\n';
+        }
+    }
+    return content;
 }
 
 async function identifyKeyFilesWithGPT(directoryStructure) {
@@ -109,8 +130,8 @@ async function generateDockerfileWithGPT(projectInfo, useMultiStage, customTempl
 Generate a Dockerfile for the following project, suitable for a production environment.
 
 ${useMultiStage 
-    ? 'IMPORTANT: Use a multi-stage build to optimize the image size. Include exactly two stages: a build stage and a final stage.'
-    : 'IMPORTANT: Use a single-stage build only. Do not include any multi-stage build instructions.'}
+    ? 'Use a multi-stage build to optimize the image size. Include at least two stages: a build stage and a final stage.'
+    : 'Use a single-stage build only. Do NOT include any multi-stage build syntax or multiple FROM instructions.'}
 
 Guidelines:
 1. Choose appropriate base image(s), preferring official lightweight images.
@@ -120,6 +141,11 @@ Guidelines:
 5. Only expose ports if required (e.g., for web services or APIs).
 6. Use ENTRYPOINT and/or CMD to start the application.
 7. Add a health check if appropriate for the application type.
+8. Optimize Docker image size and build performance.
+9. Follow Docker security best practices.
+10. Consider CI/CD processes in your Dockerfile design.
+11. Tailor the Dockerfile to the specific project type and its requirements.
+12. Apply language-specific best practices based on the detected programming language(s).
 
 Project information:
 ${JSON.stringify(projectInfo, null, 2)}
@@ -127,13 +153,17 @@ ${JSON.stringify(projectInfo, null, 2)}
 ${customTemplate ? `Base your Dockerfile on this template, adapting as needed:\n${customTemplate}` : ''}
 
 Strict instructions:
-1. Output ONLY the Dockerfile content. No explanations, quotes, or Markdown.
-2. Do NOT include any comments in the Dockerfile.
-3. Ensure the Dockerfile is specific to this project's needs.
-4. ${useMultiStage ? 'Use EXACTLY two stages: "builder" and "final".' : 'Use only ONE stage. Do NOT include any "AS" statements for naming stages.'}
-5. Keep the Dockerfile concise and efficient.
-6. If the project does not require exposed ports, do not include EXPOSE instruction.
-7. Only include necessary ENV instructions based on the project information.
+1. Output ONLY the Dockerfile content without any explanations or comments.
+2. Ensure the Dockerfile is specific to this project's needs.
+3. ${useMultiStage 
+    ? 'Use at least two stages: "builder" and "final". Add additional stages if beneficial.' 
+    : 'Use ONLY ONE stage. Do NOT use any "FROM ... AS ..." syntax or multiple FROM instructions.'}
+4. Keep the Dockerfile concise and efficient.
+5. If the project does not require exposed ports, do not include EXPOSE instruction.
+6. Only include necessary ENV instructions based on the project information.
+7. ${!useMultiStage 
+    ? 'For single-stage build, follow this structure: FROM, WORKDIR, COPY, RUN (for installations and configurations), EXPOSE (if needed), CMD/ENTRYPOINT.' 
+    : ''}
 
 Begin Dockerfile content:
 `;
