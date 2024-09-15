@@ -100,26 +100,34 @@ function extractKeyFilesContent(repoPath, keyFiles) {
 
 async function generateDockerfileWithGPT(projectInfo, useMultiStage, customTemplate) {
     const prompt = `
-Based on the following project information, generate a Dockerfile suitable for a production environment. ${useMultiStage ? 'Use multi-stage builds to optimize image size.' : 'Use a single-stage build to keep the Dockerfile simple.'} Please consider the following points:
-1. Choose an appropriate base image, preferring official lightweight images
-2. Correctly set the working directory, copy necessary files, and install dependencies
-3. Run the application as a non-root user when possible
-4. Set necessary environment variables
-5. Only expose ports if the project actually requires them (e.g., for web services or APIs)
-6. Use ENTRYPOINT and/or CMD to properly start the application
-7. Consider adding a health check if appropriate for the application type
+Generate a Dockerfile for the following project, suitable for a production environment.
 
-Analyze the project information carefully to determine:
-- If the project is a web service or requires network communication
-- The type of application (e.g., CLI tool, web server, background worker)
-- Specific runtime requirements
+${useMultiStage 
+    ? 'IMPORTANT: Use a multi-stage build to optimize the image size. Include exactly two stages: a build stage and a final stage.'
+    : 'IMPORTANT: Use a single-stage build only. Do not include any multi-stage build instructions.'}
+
+Guidelines:
+1. Choose appropriate base image(s), preferring official lightweight images.
+2. Set the working directory, copy necessary files, and install dependencies.
+3. Run the application as a non-root user if possible.
+4. Set necessary environment variables.
+5. Only expose ports if required (e.g., for web services or APIs).
+6. Use ENTRYPOINT and/or CMD to start the application.
+7. Add a health check if appropriate for the application type.
 
 Project information:
 ${JSON.stringify(projectInfo, null, 2)}
 
-${customTemplate ? `Please generate the Dockerfile based on the following template, making appropriate modifications as needed:\n${customTemplate}` : ''}
+${customTemplate ? `Base your Dockerfile on this template, adapting as needed:\n${customTemplate}` : ''}
 
-Please output only the content of the Dockerfile, without any explanations, quotation marks, or Markdown formatting. Ensure that the Dockerfile is tailored to the specific needs of this project, only including necessary steps and configurations.
+Strict instructions:
+1. Output ONLY the Dockerfile content. No explanations, quotes, or Markdown.
+2. Do NOT include any comments in the Dockerfile.
+3. Ensure the Dockerfile is specific to this project's needs.
+4. ${useMultiStage ? 'Use EXACTLY two stages: "builder" and "final".' : 'Use only ONE stage. Do NOT include any "AS" statements for naming stages.'}
+5. Keep the Dockerfile concise and efficient.
+
+Begin Dockerfile content:
 `;
 
     const response = await callGPTAPIWithRetry(prompt);
