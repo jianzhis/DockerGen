@@ -8,14 +8,20 @@ require('dotenv').config();
 const config = {
     gptApiUrl: process.env.GPT_API_URL,
     gptModel: process.env.GPT_MODEL || 'gpt-4o-mini',
-    defaultUseMultiStage: process.env.DEFAULT_USE_MULTI_STAGE === 'ture',
+    defaultUseMultiStage: process.env.DEFAULT_USE_MULTI_STAGE === 'true',
     maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
     retryDelay: parseInt(process.env.RETRY_DELAY || '1000', 10),
 };
 
+// 验证必要的配置
+if (!config.gptApiUrl) {
+    console.error('错误: GPT_API_URL 未在 .env 文件中设置');
+    process.exit(1);
+}
+
 async function generateDockerfileForRepo(repoUrl, options = {}) {
     const { useMultiStage = config.defaultUseMultiStage, templatePath } = options;
-    console.log(`[开始] 准备为 ${repoUrl} 生成 Dockerfile`);
+    console.log(`[开始] 准备为 ${repoUrl} 生成 Dockerfile (${useMultiStage ? '多阶段' : '单阶段'}构建)`);
 
     const repoPath = cloneRepository(repoUrl);
     if (!repoPath) return;
@@ -54,9 +60,9 @@ Analyze the following project information and output the result in JSON format:
 3. Possible entry point file
 4. Build commands
 5. Run commands
-6. Ports that need to be exposed
-7. Environment variables
-8. Potential volume mounts needed
+6. Ports that need to be exposed (if any)
+7. Environment variables (if any)
+8. Potential volume mounts needed (if any)
 
 Directory structure:
 ${directoryStructure}
@@ -76,7 +82,7 @@ Please ensure the output is valid JSON format without any additional formatting 
 
 async function identifyKeyFilesWithGPT(directoryStructure) {
     const prompt = `
-Based on the following project directory structure, list 5-10 files that are most important for understanding the project structure and configuration. Please return only file paths, separated by commas.
+Based on the following project directory structure, list up to 10 files that are most important for understanding the project structure and configuration. Please return only file paths, separated by commas. Prioritize configuration files, main entry points, and key source files.
 
 ${directoryStructure}
 `;
@@ -126,6 +132,8 @@ Strict instructions:
 3. Ensure the Dockerfile is specific to this project's needs.
 4. ${useMultiStage ? 'Use EXACTLY two stages: "builder" and "final".' : 'Use only ONE stage. Do NOT include any "AS" statements for naming stages.'}
 5. Keep the Dockerfile concise and efficient.
+6. If the project does not require exposed ports, do not include EXPOSE instruction.
+7. Only include necessary ENV instructions based on the project information.
 
 Begin Dockerfile content:
 `;
@@ -179,7 +187,8 @@ function generateDirectoryStructure(repoPath) {
     const ignoreDirs = ['.git', 'node_modules', 'venv', '.venv'];
     let structure = '';
 
-    function traverse(dir, prefix = '') {
+    function traverse(dir, prefix = '', depth = 0) {
+        if (depth > 5) return; // 限制递归深度
         const files = fs.readdirSync(dir);
         files.forEach((file, index) => {
             if (ignoreDirs.includes(file)) return;
@@ -189,7 +198,7 @@ function generateDirectoryStructure(repoPath) {
             const newPrefix = prefix + (isLast ? '└── ' : '├── ');
             structure += newPrefix + file + '\n';
             if (stats.isDirectory()) {
-                traverse(filePath, prefix + (isLast ? '    ' : '│   '));
+                traverse(filePath, prefix + (isLast ? '    ' : '│   '), depth + 1);
             }
         });
     }
@@ -236,13 +245,11 @@ function loadCustomTemplate(templatePath) {
     return null;
 }
 
-// 主函数调用
 async function main() {
-    // 获取命令行参数
     const args = process.argv.slice(2);
     
     if (args.length === 0) {
-        console.error('请提供一个仓库 URL。使用方法: node app.js <repo_url>');
+        console.error('请提供一个仓库 URL。使用方法: node app.js <repo_url> [--multi-stage] [--template <path>]');
         process.exit(1);
     }
 
