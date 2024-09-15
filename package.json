@@ -1,0 +1,8 @@
+{
+  "description": "一个使用 GPT API 为指定的 Git 仓库生成 Dockerfile 的 Node.js 脚本。",
+  "author": "sekey",
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5"
+  }
+}
