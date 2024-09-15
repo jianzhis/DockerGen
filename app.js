@@ -8,7 +8,7 @@ require('dotenv').config();
 const config = {
     gptApiUrl: process.env.GPT_API_URL,
     gptModel: process.env.GPT_MODEL || 'gpt-4o-mini',
-    defaultUseMultiStage: process.env.DEFAULT_USE_MULTI_STAGE === 'false',
+    defaultUseMultiStage: process.env.DEFAULT_USE_MULTI_STAGE === 'ture',
     maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
     retryDelay: parseInt(process.env.RETRY_DELAY || '1000', 10),
 };
