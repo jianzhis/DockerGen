@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 // 从 .env 文件加载配置
 const config = {
     gptApiUrl: process.env.GPT_API_URL,
-    gptModel: process.env.GPT_MODEL || 'gpt-4o-mini',
+    gptModel: process.env.GPT_MODEL || 'gpt-4',
     defaultUseMultiStage: process.env.DEFAULT_USE_MULTI_STAGE === 'true',
     maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
     retryDelay: parseInt(process.env.RETRY_DELAY || '1000', 10),
@@ -61,34 +61,41 @@ async function analyzeProjectWithGPT(repoPath) {
     const keyFilesContent = extractKeyFilesContent(repoPath, keyFiles);
 
     const analysisPrompt = `
-Analyze the following project information and output the result in JSON format:
-1. Programming language(s) used
-2. Main dependency management files (e.g., requirements.txt, package.json, composer.json, etc.)
-3. Possible entry point file
-4. Build commands
-5. Run commands
-6. Ports that need to be exposed (if any)
-7. Environment variables (if any)
-8. Potential volume mounts needed (if any)
-9. Any existing Docker-related configurations
-10. Project type (MUST be one of: "CLI tool", "Web application", "API service", "One-time execution script", or "Library")
-11. Any specific framework or major libraries used
-12. Is this project designed to run as a long-running service? (true/false)
-13. Does this project require user interaction or input after startup? (true/false)
+Analyze the following project and provide a detailed JSON output to facilitate Dockerfile generation:
 
-Directory structure:
+Directory Structure:
 ${directoryStructure}
 
-README content:
+README Content:
 ${readmeContent}
 
-Docker-related files:
+Docker-related Files:
 ${dockerRelatedFiles}
 
-Key files content:
+Key Files Content:
 ${keyFilesContent}
 
-Please ensure the output is valid JSON format without any additional formatting or code block markers.
+Please provide a comprehensive analysis including, but not limited to:
+1. Programming languages and their versions
+2. Frameworks and major libraries
+3. Build system (e.g., Make, Gradle, npm)
+4. Entry point or main executable
+5. Required runtime environment
+6. Dependencies and how they're managed
+7. Configuration files and their purposes
+8. Environment variables
+9. Exposed ports
+10. Volume mount points
+11. Build and run commands
+12. Testing framework and commands
+13. CI/CD pipeline configurations
+14. Logging mechanism
+15. Project type (e.g., web app, CLI tool, microservice)
+16. Scalability considerations
+17. Security considerations
+18. Any specific deployment requirements
+
+Output the analysis as a JSON object. Use null for unknown values and [] for empty lists. Be as detailed and specific as possible.
 `;
 
     const projectInfoResponse = await callGPTAPIWithRetry(analysisPrompt);
@@ -102,7 +109,7 @@ function extractDockerRelatedFiles(repoPath) {
         const filePath = path.join(repoPath, file);
         if (fs.existsSync(filePath)) {
             content += `--- ${file} ---\n`;
-            content += fs.readFileSync(filePath, 'utf-8').slice(0, 1000); // 限制每个文件的内容
+            content += fs.readFileSync(filePath, 'utf-8').slice(0, 1000);
             content += '\n\n';
         }
     }
@@ -126,7 +133,7 @@ function extractKeyFilesContent(repoPath, keyFiles) {
         const filePath = path.join(repoPath, file);
         if (fs.existsSync(filePath)) {
             content += `--- ${file} ---\n`;
-            content += fs.readFileSync(filePath, 'utf-8').slice(0, 1000); // 限制每个文件的内容
+            content += fs.readFileSync(filePath, 'utf-8').slice(0, 1000);
             content += '\n\n';
         }
     }
@@ -135,53 +142,37 @@ function extractKeyFilesContent(repoPath, keyFiles) {
 
 async function generateDockerfileWithGPT(projectInfo, useMultiStage, customTemplate) {
     const prompt = `
-Generate a Dockerfile for the following project, suitable for a production environment.
+Generate a production-ready Dockerfile for the following project:
 
-${useMultiStage 
-    ? 'Use a multi-stage build to optimize the image size. Include at least two stages: a build stage and a final stage.'
-    : 'Use a single-stage build only. Do NOT include any multi-stage build syntax or multiple FROM instructions.'}
-
-Guidelines:
-1. Choose appropriate base image(s), preferring official lightweight images.
-2. Set the working directory, copy necessary files, and install dependencies.
-3. Run the application as a non-root user if possible.
-4. Set necessary environment variables based on the project information.
-5. Only expose ports if explicitly required (e.g., for web services or APIs).
-6. For CLI tools or projects that need to keep running:
-   - Use CMD ["tail", "-f", "/dev/null"] to keep the container running.
-   - Add a comment explaining how to use 'docker exec' to run the application.
-7. For web applications or API services:
-   - Use CMD to start the application.
-   - Consider adding a health check.
-8. For one-time execution scripts:
-   - Use CMD with the script or command to run.
-9. Optimize Docker image size and build performance.
-10. Follow Docker security best practices.
-11. Tailor the Dockerfile to the specific project type and its requirements.
-12. Apply language-specific best practices based on the detected programming language(s).
-
-Project information:
 ${JSON.stringify(projectInfo, null, 2)}
 
-${customTemplate ? `Base your Dockerfile on this template, adapting as needed:\n${customTemplate}` : ''}
+Build Type: ${useMultiStage ? 'Multi-stage' : 'Single-stage'}
 
-Strict instructions:
-1. Your response must ONLY contain the Dockerfile content, nothing else.
-2. Begin your response with "FROM" on the first line.
-3. Ensure the Dockerfile is specific to this project's needs and type.
-4. ${useMultiStage 
-    ? 'Use at least two stages: "builder" and "final". Add additional stages if beneficial.' 
-    : 'Use ONLY ONE stage. Do NOT use any "FROM ... AS ..." syntax or multiple FROM instructions.'}
-5. Keep the Dockerfile concise and efficient.
-6. Do not include EXPOSE instruction unless the project explicitly requires network communication.
-7. Only include necessary ENV instructions based on the project information.
-8. For CLI tools or projects that need to keep running, use CMD ["tail", "-f", "/dev/null"] and include a comment explaining how to use 'docker exec' to run commands.
-9. ${!useMultiStage 
-    ? 'For single-stage build, follow this structure: FROM, WORKDIR, COPY, RUN (for installations and configurations), ENV (if needed), CMD.' 
-    : ''}
-10. Include brief comments where necessary to explain important steps or usage instructions.
+Guidelines:
+1. Base Image: Choose the most appropriate and lightweight official base image. Use specific version tags.
+2. Build Environment: Set up the build environment with necessary tools and dependencies.
+3. Runtime Environment: Ensure the runtime environment has only what's necessary for the application to run.
+4. Security: Implement security best practices (e.g., run as non-root, use least privilege principle).
+5. Dependency Management: Install and manage dependencies efficiently, considering caching and layer optimization.
+6. Application Setup: Copy application files, set working directory, and configure the application.
+7. Entrypoint and CMD: Choose the most appropriate way to start the application based on its type.
+8. Ports and Volumes: Expose ports and define volumes only if necessary.
+9. Environment Variables: Set required environment variables and provide defaults where appropriate.
+10. Healthchecks: Implement a healthcheck if the application supports it.
+11. Optimization: Minimize image size and optimize for build and runtime performance.
+12. Documentation: Include comments explaining key decisions and usage instructions.
 
-Begin your response now:
+${customTemplate ? `Base Template:\n${customTemplate}\n` : ''}
+
+Consider the following scenarios and adapt the Dockerfile accordingly:
+- Web Application: Include web server configuration, consider using application servers if needed.
+- API Service: Focus on scalability and performance, consider using a process manager.
+- CLI Tool: Provide clear instructions on how to use the tool within the container.
+- Background Worker: Implement appropriate process management and logging.
+- Stateful Application: Properly handle data persistence and volume management.
+- Stateless Application: Optimize for horizontal scalability.
+
+Your response should only contain the Dockerfile content, starting with the FROM instruction. Include helpful comments where necessary.
 `;
 
     const response = await callGPTAPIWithRetry(prompt);
@@ -220,24 +211,16 @@ function cleanJSONResponse(response) {
 }
 
 function cleanDockerfileContent(content) {
-    // Remove any leading or trailing whitespace
     content = content.trim();
-
-    // Ensure the content starts with 'FROM'
     const fromIndex = content.toLowerCase().indexOf('from');
     if (fromIndex > 0) {
         content = content.substring(fromIndex);
     }
-
-    // Remove any markdown code block syntax
     content = content.replace(/```dockerfile\s*|\s*```/g, '');
-
-    // Remove any quotes that might be wrapping the entire content
     if ((content.startsWith('"') && content.endsWith('"')) || 
         (content.startsWith("'") && content.endsWith("'"))) {
         content = content.slice(1, -1);
     }
-
     return content;
 }
 
@@ -246,7 +229,7 @@ function generateDirectoryStructure(repoPath) {
     let structure = '';
 
     function traverse(dir, prefix = '', depth = 0) {
-        if (depth > 5) return; // 限制递归深度
+        if (depth > 5) return;
         const files = fs.readdirSync(dir);
         files.forEach((file, index) => {
             if (ignoreDirs.includes(file)) return;
@@ -270,7 +253,7 @@ function extractReadme(repoPath) {
     for (const file of readmeFiles) {
         const filePath = path.join(repoPath, file);
         if (fs.existsSync(filePath)) {
-            return fs.readFileSync(filePath, 'utf-8').slice(0, 2000); // 限制 README 内容
+            return fs.readFileSync(filePath, 'utf-8').slice(0, 2000);
         }
     }
     return '';
