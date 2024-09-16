@@ -1,23 +1,20 @@
-FROM node:14-slim
+FROM node:14-alpine
 
-# Set the working directory
 WORKDIR /usr/src/app
 
-# Copy package files and install dependencies
 COPY package*.json ./
 RUN npm install --production
 
-# Copy the rest of the application code
 COPY . .
 
-# Set environment variables
-ENV GPT_API_URL=
-ENV GPT_MODEL=
-ENV DEFAULT_USE_MULTI_STAGE=
-ENV MAX_RETRIES=
-ENV RETRY_DELAY=
-ENV TEMPLATE_PATH=
+ENV GPT_API_URL=http://api.openai.com/v1/chat/completions
+ENV GPT_MODEL=gpt-4o-mini
+ENV DEFAULT_USE_MULTI_STAGE=false
+ENV MAX_RETRIES=3
+ENV RETRY_DELAY=1000
+ENV TEMPLATE_PATH=./custom_dockerfile_template.txt
 
-# Keep the container running
-CMD ["tail", "-f", "/dev/null"] 
-# Use 'docker exec -it <container_id> node app.js <repo_url> [--multi-stage] [--template <template_path>]' to run the application.
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+CMD ["node", "app.js"]

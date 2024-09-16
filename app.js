@@ -15,6 +15,7 @@ const config = {
     gptApiUrl: process.env.GPT_API_URL,
     gptModel: process.env.GPT_MODEL || 'gpt-4',
     defaultUseMultiStage: process.env.DEFAULT_USE_MULTI_STAGE === 'true',
+    defaultIncludeComments: process.env.DEFAULT_INCLUDE_COMMENTS !== 'false',
     maxRetries: parseInt(process.env.MAX_RETRIES || '3', 10),
     retryDelay: parseInt(process.env.RETRY_DELAY || '1000', 10),
 };
@@ -26,8 +27,13 @@ if (!config.gptApiUrl) {
 }
 
 async function generateDockerfileForRepo(repoUrl, options = {}) {
-    const { useMultiStage = config.defaultUseMultiStage, templatePath } = options;
-    console.log(`[开始] 准备为 ${repoUrl} 生成 Dockerfile (${useMultiStage ? '多阶段' : '单阶段'}构建)`);
+    const { 
+        useMultiStage = config.defaultUseMultiStage, 
+        templatePath, 
+        includeComments = config.defaultIncludeComments 
+    } = options;
+    
+    console.log(`[开始] 准备为 ${repoUrl} 生成 Dockerfile (${useMultiStage ? '多阶段' : '单阶段'}构建, ${includeComments ? '包含' : '不包含'}注释)`);
 
     const repoPath = cloneRepository(repoUrl);
     if (!repoPath) return;
@@ -38,7 +44,7 @@ async function generateDockerfileForRepo(repoUrl, options = {}) {
 
         console.log('[生成] 正在生成 Dockerfile');
         const customTemplate = templatePath ? loadCustomTemplate(templatePath) : null;
-        const dockerfileContent = await generateDockerfileWithGPT(projectInfo, useMultiStage, customTemplate);
+        const dockerfileContent = await generateDockerfileWithGPT(projectInfo, useMultiStage, customTemplate, includeComments);
 
         if (dockerfileContent) {
             const dockerfilePath = path.join(repoPath, 'Dockerfile');
@@ -140,7 +146,7 @@ function extractKeyFilesContent(repoPath, keyFiles) {
     return content;
 }
 
-async function generateDockerfileWithGPT(projectInfo, useMultiStage, customTemplate) {
+async function generateDockerfileWithGPT(projectInfo, useMultiStage, customTemplate, includeComments) {
     const prompt = `
 Generate a production-ready Dockerfile for the following project:
 
@@ -160,7 +166,7 @@ Guidelines:
 9. Environment Variables: Set required environment variables and provide defaults where appropriate.
 10. Healthchecks: Implement a healthcheck if the application supports it.
 11. Optimization: Minimize image size and optimize for build and runtime performance.
-12. Documentation: Include comments explaining key decisions and usage instructions.
+12. Documentation: ${includeComments ? 'Include comments explaining key decisions and usage instructions.' : 'Do not include any comments in the Dockerfile.'}
 
 ${customTemplate ? `Base Template:\n${customTemplate}\n` : ''}
 
@@ -172,7 +178,7 @@ Consider the following scenarios and adapt the Dockerfile accordingly:
 - Stateful Application: Properly handle data persistence and volume management.
 - Stateless Application: Optimize for horizontal scalability.
 
-Your response should only contain the Dockerfile content, starting with the FROM instruction. Include helpful comments where necessary.
+Your response should only contain the Dockerfile content, starting with the FROM instruction. ${includeComments ? 'Include helpful comments where necessary.' : 'Do not include any comments in the Dockerfile.'}
 `;
 
     const response = await callGPTAPIWithRetry(prompt);
@@ -290,17 +296,19 @@ async function main() {
     const args = process.argv.slice(2);
     
     if (args.length === 0) {
-        console.error('请提供一个仓库 URL。使用方法: node app.js <repo_url> [--multi-stage] [--template <path>]');
+        console.error('请提供一个仓库 URL。使用方法: node app.js <repo_url> [--multi-stage] [--template <path>] [--no-comments]');
         process.exit(1);
     }
 
     const repoUrl = args[0];
     const useMultiStage = args.includes('--multi-stage') ? true : config.defaultUseMultiStage;
     const templatePath = args.includes('--template') ? args[args.indexOf('--template') + 1] : process.env.TEMPLATE_PATH;
+    const includeComments = args.includes('--no-comments') ? false : config.defaultIncludeComments;
 
     await generateDockerfileForRepo(repoUrl, { 
         useMultiStage,
-        templatePath
+        templatePath,
+        includeComments
     });
 }
 
