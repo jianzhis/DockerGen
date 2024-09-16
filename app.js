@@ -1,8 +1,14 @@
-const { execSync } = require('child_process');
-const path = require('path');
-const fs = require('fs');
-const axios = require('axios');
-require('dotenv').config();
+import { execSync } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+import axios from 'axios';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 从 .env 文件加载配置
 const config = {
