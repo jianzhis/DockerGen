@@ -143,15 +143,19 @@ Guidelines:
 1. Choose appropriate base image(s), preferring official lightweight images.
 2. Set the working directory, copy necessary files, and install dependencies.
 3. Run the application as a non-root user if possible.
-4. Set necessary environment variables.
-5. Only expose ports if required (e.g., for web services or APIs).
-6. Use ENTRYPOINT and/or CMD to start the application.
-7. Add a health check if appropriate for the application type.
+4. Set necessary environment variables based on the project information.
+5. Only expose ports if explicitly required (e.g., for web services or APIs).
+6. For web applications or services:
+   - Use CMD to start the application.
+   - Consider adding a health check.
+7. For non-web applications (e.g., CLI tools, batch jobs):
+   - Use ENTRYPOINT with the JSON array syntax to allow for argument passing.
+   - Do not include CMD.
+   - Do not add a health check.
 8. Optimize Docker image size and build performance.
 9. Follow Docker security best practices.
-10. Consider CI/CD processes in your Dockerfile design.
-11. Tailor the Dockerfile to the specific project type and its requirements.
-12. Apply language-specific best practices based on the detected programming language(s).
+10. Tailor the Dockerfile to the specific project type and its requirements.
+11. Apply language-specific best practices based on the detected programming language(s).
 
 Project information:
 ${JSON.stringify(projectInfo, null, 2)}
@@ -159,19 +163,23 @@ ${JSON.stringify(projectInfo, null, 2)}
 ${customTemplate ? `Base your Dockerfile on this template, adapting as needed:\n${customTemplate}` : ''}
 
 Strict instructions:
-1. Output ONLY the Dockerfile content without any explanations or comments.
-2. Ensure the Dockerfile is specific to this project's needs.
-3. ${useMultiStage 
+1. Your response must ONLY contain the Dockerfile content, nothing else.
+2. Begin your response with "FROM" on the first line.
+3. Ensure the Dockerfile is specific to this project's needs and type (web application vs. non-web application).
+4. ${useMultiStage 
     ? 'Use at least two stages: "builder" and "final". Add additional stages if beneficial.' 
     : 'Use ONLY ONE stage. Do NOT use any "FROM ... AS ..." syntax or multiple FROM instructions.'}
-4. Keep the Dockerfile concise and efficient.
-5. If the project does not require exposed ports, do not include EXPOSE instruction.
-6. Only include necessary ENV instructions based on the project information.
-7. ${!useMultiStage 
-    ? 'For single-stage build, follow this structure: FROM, WORKDIR, COPY, RUN (for installations and configurations), EXPOSE (if needed), CMD/ENTRYPOINT.' 
+5. Keep the Dockerfile concise and efficient.
+6. Do not include EXPOSE instruction unless the project explicitly requires network communication.
+7. Only include necessary ENV instructions based on the project information.
+8. For non-web applications, use ENTRYPOINT without CMD to allow for argument passing.
+9. Ensure the Dockerfile doesn't cause the container to exit immediately upon running for non-web applications.
+10. ${!useMultiStage 
+    ? 'For single-stage build, follow this structure: FROM, WORKDIR, COPY, RUN (for installations and configurations), ENV (if needed), EXPOSE (if needed), ENTRYPOINT/CMD.' 
     : ''}
+11. Do not include any explanations, comments, or additional text outside of the Dockerfile content.
 
-Begin Dockerfile content:
+Begin your response now:
 `;
 
     const response = await callGPTAPIWithRetry(prompt);
@@ -210,12 +218,24 @@ function cleanJSONResponse(response) {
 }
 
 function cleanDockerfileContent(content) {
-    content = content.replace(/```Dockerfile\s*|\s*```/g, '');
+    // Remove any leading or trailing whitespace
     content = content.trim();
+
+    // Ensure the content starts with 'FROM'
+    const fromIndex = content.toLowerCase().indexOf('from');
+    if (fromIndex > 0) {
+        content = content.substring(fromIndex);
+    }
+
+    // Remove any markdown code block syntax
+    content = content.replace(/```dockerfile\s*|\s*```/g, '');
+
+    // Remove any quotes that might be wrapping the entire content
     if ((content.startsWith('"') && content.endsWith('"')) || 
         (content.startsWith("'") && content.endsWith("'"))) {
         content = content.slice(1, -1);
     }
+
     return content;
 }
 
