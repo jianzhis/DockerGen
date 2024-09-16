@@ -71,8 +71,10 @@ Analyze the following project information and output the result in JSON format:
 7. Environment variables (if any)
 8. Potential volume mounts needed (if any)
 9. Any existing Docker-related configurations
-10. Project type (e.g., Web application, API service, Batch job, etc.)
+10. Project type (MUST be one of: "CLI tool", "Web application", "API service", "One-time execution script", or "Library")
 11. Any specific framework or major libraries used
+12. Is this project designed to run as a long-running service? (true/false)
+13. Does this project require user interaction or input after startup? (true/false)
 
 Directory structure:
 ${directoryStructure}
@@ -145,17 +147,18 @@ Guidelines:
 3. Run the application as a non-root user if possible.
 4. Set necessary environment variables based on the project information.
 5. Only expose ports if explicitly required (e.g., for web services or APIs).
-6. For web applications or services:
+6. For CLI tools or projects that need to keep running:
+   - Use CMD ["tail", "-f", "/dev/null"] to keep the container running.
+   - Add a comment explaining how to use 'docker exec' to run the application.
+7. For web applications or API services:
    - Use CMD to start the application.
    - Consider adding a health check.
-7. For non-web applications (e.g., CLI tools, batch jobs):
-   - Use ENTRYPOINT with the JSON array syntax to allow for argument passing.
-   - Do not include CMD.
-   - Do not add a health check.
-8. Optimize Docker image size and build performance.
-9. Follow Docker security best practices.
-10. Tailor the Dockerfile to the specific project type and its requirements.
-11. Apply language-specific best practices based on the detected programming language(s).
+8. For one-time execution scripts:
+   - Use CMD with the script or command to run.
+9. Optimize Docker image size and build performance.
+10. Follow Docker security best practices.
+11. Tailor the Dockerfile to the specific project type and its requirements.
+12. Apply language-specific best practices based on the detected programming language(s).
 
 Project information:
 ${JSON.stringify(projectInfo, null, 2)}
@@ -165,19 +168,18 @@ ${customTemplate ? `Base your Dockerfile on this template, adapting as needed:\n
 Strict instructions:
 1. Your response must ONLY contain the Dockerfile content, nothing else.
 2. Begin your response with "FROM" on the first line.
-3. Ensure the Dockerfile is specific to this project's needs and type (web application vs. non-web application).
+3. Ensure the Dockerfile is specific to this project's needs and type.
 4. ${useMultiStage 
     ? 'Use at least two stages: "builder" and "final". Add additional stages if beneficial.' 
     : 'Use ONLY ONE stage. Do NOT use any "FROM ... AS ..." syntax or multiple FROM instructions.'}
 5. Keep the Dockerfile concise and efficient.
 6. Do not include EXPOSE instruction unless the project explicitly requires network communication.
 7. Only include necessary ENV instructions based on the project information.
-8. For non-web applications, use ENTRYPOINT without CMD to allow for argument passing.
-9. Ensure the Dockerfile doesn't cause the container to exit immediately upon running for non-web applications.
-10. ${!useMultiStage 
-    ? 'For single-stage build, follow this structure: FROM, WORKDIR, COPY, RUN (for installations and configurations), ENV (if needed), EXPOSE (if needed), ENTRYPOINT/CMD.' 
+8. For CLI tools or projects that need to keep running, use CMD ["tail", "-f", "/dev/null"] and include a comment explaining how to use 'docker exec' to run commands.
+9. ${!useMultiStage 
+    ? 'For single-stage build, follow this structure: FROM, WORKDIR, COPY, RUN (for installations and configurations), ENV (if needed), CMD.' 
     : ''}
-11. Do not include any explanations, comments, or additional text outside of the Dockerfile content.
+10. Include brief comments where necessary to explain important steps or usage instructions.
 
 Begin your response now:
 `;
